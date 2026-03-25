@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import warnings
+import json
 
 warnings.filterwarnings("ignore")
 
@@ -70,7 +71,6 @@ def generate_report(target_lat, target_lon, df, model):
     rugged = grid["RUGGEDNESS_TRI"]
 
     # 5. Engineering Logic (Translating AI to Action)
-    # Estimate rooftop harvest for a standard 150 sq meter rural/semi-urban roof (Runoff Coeff: 0.85)
     harvest_liters = rain * 150 * 0.85
 
     structure = "Custom Assessment Required"
@@ -92,33 +92,43 @@ def generate_report(target_lat, target_lon, df, model):
         structure = "Hybrid System (Filter -> Tank -> Soak Pit)"
         warning = f"Moderate terrain. Longest dry spell is {dry_days:.0f} days. Size primary tank accordingly."
 
-    # 6. Render the Dashboard
-    print("\n" + "=" * 60)
-    print(f" 📍 LOCATION DIAGNOSIS: Lat {target_lat}, Lon {target_lon}")
-    print(
-        f"    (Matched to Grid Center: Lat {grid['LATITUDE']:.2f}, Lon {grid['LONGITUDE']:.2f})"
-    )
-    print("=" * 60)
+    # 6. RETURN AS JSON (Replacing the print statements)
+    report_dict = {
+        "location": {
+            "requested_lat": float(target_lat),
+            "requested_lon": float(target_lon),
+            "matched_grid_lat": float(grid["LATITUDE"]),
+            "matched_grid_lon": float(grid["LONGITUDE"]),
+        },
+        "hydrology": {
+            "reliable_rainfall_mm_yr": float(round(rain, 1)),
+            "max_dry_spell_days": int(round(dry_days, 0)),
+            "est_roof_harvest_liters_yr": float(round(harvest_liters, 0)),
+            "extreme_storm_load_mm_day": float(round(peak_storm, 1)),
+        },
+        "geotechnical": {
+            "slope_degrees": float(round(slope, 2)),
+            "ruggedness_tri": float(round(rugged, 1)),
+            "sand_percent": float(round(sand, 1)),
+            "clay_percent": float(round(clay, 1)),
+        },
+        "ai_diagnosis": {
+            "expert_zone": predicted_zone,
+            "recommended_structure": structure,
+            "engineering_note": warning,
+        },
+    }
 
-    print("\n🌊 1. CLIMATE & HYDROLOGY")
-    print(f"  • Reliable Rainfall:      {rain:.0f} mm/year")
-    print(f"  • Max Dry Spell:          {dry_days:.0f} Days")
-    print(
-        f"  • Est. Roof Harvest:      {harvest_liters:,.0f} Liters/year (Assumes 150m² roof)"
-    )
-    print(
-        f"  • Extreme Storm Load:     {peak_storm:.0f} mm/day (Design capacity baseline)"
-    )
+    # Return a formatted JSON string
+    return json.dumps(report_dict, indent=4)
 
-    print("\n🪨 2. GEOTECHNICAL & TERRAIN")
-    print(f"  • Topography:             Slope {slope:.1f}° | Ruggedness: {rugged:.0f}")
-    print(f"  • Soil Composition:       {sand:.1f}% Sand | {clay:.1f}% Clay")
 
-    print("\n👷 3. EXPERT AI DIAGNOSIS")
-    print(f"  • Verdict:                {predicted_zone}")
-    print(f"  • Recommended Structure:  {structure}")
-    print(f"  • Engineering Note:       {warning}")
-    print("=" * 60 + "\n")
+if __name__ == "__main__":
+    df_master, ai_model = load_system()
+
+    # Test it
+    json_output = generate_report(29.6, 74.3, df_master, ai_model)
+    print(json_output)
 
 
 if __name__ == "__main__":
@@ -131,12 +141,6 @@ if __name__ == "__main__":
 
         generate_report(test_lat, test_lon, df_master, ai_model)
 
-        # You can add an interactive loop here for your presentation!
-        # while True:
-        #     lat = float(input("Enter Latitude (or 0 to quit): "))
-        #     if lat == 0: break
-        #     lon = float(input("Enter Longitude: "))
-        #     generate_report(lat, lon, df_master, ai_model)
 
     except FileNotFoundError:
         print(
